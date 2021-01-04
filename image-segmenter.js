@@ -15,6 +15,9 @@ let model
 let imageElement
 let colorMap
 let output
+var name=""
+var bruise_ratio=[]
+
 
 // threshold
 const thr_1=0.5
@@ -42,10 +45,10 @@ window.loadModel = async function () {
   message('message1',`berrySeg_model loaded in ${(end2 - start2) / 1000} secs`, true)
 
   let start3 = (new Date()).getTime()
-  // bruiseSeg_model = await tf.loadGraphModel(bruiseSegUrl)
-  bruiseSeg_model = await tf.loadLayersModel(bruiseSegUrl)
-  bruiseSeg_model.getWeights()[0].print()
-  bruiseSeg_model.summary()
+  bruiseSeg_model = await tf.loadGraphModel(bruiseSegUrl)
+  // bruiseSeg_model = await tf.loadLayersModel(bruiseSegUrl)
+  // bruiseSeg_model.getWeights()[0].print()
+  // bruiseSeg_model.summary()
 
   let end3 = (new Date()).getTime()
   message('message1',`bruiseSeg_model loaded in ${(end3 - start3) / 1000} secs`, true)
@@ -55,19 +58,23 @@ window.loadModel = async function () {
 
 
 originalImage=new Image()
+
 /**
  * handle image upload
  *
  * @param {DOM Node} input - the image file upload element
  */
 window.loadImage = function (input) {
+  name=input.files[0].name;
+  console.log(name)
+  console.log(String(name))
   individualBerry=[];
   let canvas_1= document.getElementById("canvasimage")
   canvas_1.getContext('2d').clearRect(0,0,canvas_1.width,canvas_1.height);
   let canvas_2= document.getElementById("canvascrop")
   canvas_2.getContext('2d').clearRect(0,0,canvas_2.width,canvas_2.height);
-  let canvas_3 =document.getElementById("bruiseResult")
-  canvas_3.getContext('2d').clearRect(0,0,canvas_3.width,canvas_3.height);
+  // let canvas_3 =document.getElementById("bruiseResult")
+  // canvas_3.getContext('2d').clearRect(0,0,canvas_3.width,canvas_3.height);
   let canvas_4 =document.getElementById("origin")
   canvas_4.getContext('2d').clearRect(0,0,canvas_4.width,canvas_4.height);
   let canvas_5 =document.getElementById("berrySegmentation")
@@ -81,6 +88,7 @@ window.loadImage = function (input) {
   document.getElementById('message6').innerHTML = "";
   document.getElementById('message7').innerHTML = "";
   document.getElementById('message8').innerHTML = "";
+  document.getElementById('message9').innerHTML = "";
 
   if (input.files && input.files[0]) {
     // disableElements('input:'+input.files )
@@ -200,15 +208,16 @@ window.runModel = async function () {
 
 
 //berry segmentaion for individual berry
-var bruise_ratio=[]
+
 window.segmentBerry = async function () {
+  bruise_ratio=[];
   message('message2',`start segmentation...`)
   let start = (new Date()).getTime()
 
-  let ratio_canvas=document.getElementById('bruiseResult');
-  let ratio_ctx=ratio_canvas.getContext('2d');
-  ratio_ctx.font = "15px Times New Roman";
-  ratio_ctx.fillText('' ,0, 0);
+  // let ratio_canvas=document.getElementById('bruiseResult');
+  // let ratio_ctx=ratio_canvas.getContext('2d');
+  // ratio_ctx.font = "15px Times New Roman";
+  // ratio_ctx.fillText('' ,0, 0);
 
   let mask_canvas=document.getElementById('origin');
   let mask_ctx=mask_canvas.getContext('2d');
@@ -216,6 +225,11 @@ window.segmentBerry = async function () {
   mask_ctx.beginPath();
   mask_ctx.lineWidth = "0.5";
   mask_ctx.strokeStyle = "blue";
+  category_0=0;
+  category_1=0;
+  category_2=0;
+  category_3=0;
+  category_4=0;
   
   // predict result
   for (var i=0;i<individualBerry.length;i++){
@@ -291,22 +305,57 @@ window.segmentBerry = async function () {
     mask_ctx.stroke();
     drawImage('berrySegmentation',berry_mask,x0,y0)
     drawImage('bruiseSegmentation',bruise_mask,x0,y0)
+
+    if(ratio==0){
+      category_0=category_0+1;
+    } else if (ratio>0 & ratio<=0.05){
+      category_1=category_1+1;
+    } else if (ratio>0.05 & ratio<=0.1){
+      category_2=category_2+1;
+    } else if (ratio>0.1 & ratio<=0.2){
+      category_3=category_3+1;
+    } else if (ratio>0.2){
+      category_4=category_4+1;
+    }
+
   }
   let end = (new Date()).getTime()
   message('message2',`finish segmentation in ${(end - start) / 1000} secs`, true)
   document.getElementById('download').disabled = false
+
+
+  message('message9','Result Analysis',true);
+  sum_ratio=bruise_ratio.reduce((previous, current) => current += previous);
+  mean_ratio=sum_ratio/bruise_ratio.length;
+  message('message9','Total '+bruise_ratio.length+' berries were detected');
+  message('message9','Average ratio:'+Math.round(mean_ratio)+'%');
+  message('message9','No brusie: '+category_0);
+  message('message9','     0-5%: '+category_1);
+  message('message9','   5%-10%: '+category_2);
+  message('message9','  10%-20%: '+category_3);
+  message('message9','     >20%: '+category_4);
 }
 
-function downloadFile() {
+window.download = function () {
+  var filename;
+  var i = name.lastIndexOf('.');
+  if (i==-1)
+    filename = name+'.txt';
+  else
+    filename = name.substring(0,i);
+  downloadFile(filename);
+}
+
+function downloadFile(file_name) {
   var obj = bruise_ratio;
-  var filename = "download.json";
+  // var filename = "download.json";  
   var blob = new Blob([JSON.stringify(obj)], {type: 'text/plain'});
   if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-      window.navigator.msSaveOrOpenBlob(blob, filename);
+      window.navigator.msSaveOrOpenBlob(blob, file_name);
   } else{
       var e = document.createEvent('MouseEvents'),
       a = document.createElement('a');
-      a.download = filename;
+      a.download = file_name;
       a.href = window.URL.createObjectURL(blob);
       a.dataset.downloadurl = ['text/plain', a.download, a.href].join(':');
       e.initEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
@@ -362,7 +411,7 @@ function CountPixel (output,threshold) {
  */
 async function processOutput (output,color,threshold) {
   let segMap = Array.from(output.dataSync())
-  console.log('segMap',segMap)
+  // console.log('segMap',segMap)
   segMapColor=[]
   for(var i=0;i<segMap.length;i++){
     if (segMap[i]>threshold){
